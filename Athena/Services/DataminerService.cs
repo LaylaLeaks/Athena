@@ -8,25 +8,25 @@ using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.VirtualFileSystem;
 using Athena.Models.API.Responses;
+using CUE4Parse.FileProvider.Vfs;
 
 namespace Athena.Services;
 
 public class DataminerService
 {
-    public ManifestService Manifest = null!;
-    public StreamedFileProvider Provider = null!;
+    public ManifestService? Manifest;
+    public AbstractVfsFileProvider Provider = null!;
 
     public readonly List<GameFile> AllEntries = [];
     public readonly List<GameFile> NewEntries = [];
 
     public readonly FGuid ZERO_GUID = new();
+    
+    public string GameVersion => Manifest?.GameVersion ?? "Local";
 
     public async Task Initialize()
     {
         Log.ForContext("NoConsole", true).Information("UE version: {version}", AppSettings.Default.EngineVersion);
-
-        Manifest = new();
-        Provider = new("", new(AppSettings.Default.EngineVersion), StringComparer.OrdinalIgnoreCase);
 
         await DeleteChunksCache(); // now people can stop complain about big .data folder sizes
 
@@ -38,16 +38,15 @@ public class DataminerService
 #endif
         CUE4Parse.Globals.WarnMissingImportPackage = false; // disable missing imports warnings
 
-        Provider.VfsRegistered += (sender, num) =>
+        if (AppSettings.Default.UseLocalPath)
         {
-            if (sender is not IAesVfsReader reader)
-                return;
-
-            Log.Information("Loaded {name} ({archives} archives)", reader.Name, num);
-        };
-
-        await LoadEpicManifest();
-        await MountArchives();
+            await InitLocalProvider();
+        }
+        else
+        {
+            await InitManifestProvider();
+        }
+        
         await LoadMappings();
         await LoadKeys();
 
@@ -57,6 +56,46 @@ public class DataminerService
             r => r.EncryptionKeyGuid == ZERO_GUID ||
             !Provider.RequiredKeys.Contains(r.EncryptionKeyGuid)
         );
+    }
+
+    private async Task InitLocalProvider()
+    {
+        var gamePath = AppSettings.Default.LocalGamePath;
+        Log.Information($"Using local game path: {gamePath}");
+
+        var localProvider = new DefaultFileProvider(
+            gamePath,
+            SearchOption.TopDirectoryOnly,
+            isCaseInsensitive: true,
+            new(AppSettings.Default.EngineVersion)
+        );
+
+        localProvider.VfsRegistered += (sender, num) =>
+        {
+            if (sender is not IAesVfsReader reader) return;
+            Log.Information($"Loaded {reader.Name} ({num} archives)");
+        };
+        
+        Provider = localProvider;
+        localProvider.Initialize();
+        await localProvider.MountAsync();
+    }
+    
+    private async Task InitManifestProvider()
+    {
+        Manifest = new();
+        var streamedProvider =
+            new StreamedFileProvider("", new(AppSettings.Default.EngineVersion), StringComparer.OrdinalIgnoreCase);
+
+        streamedProvider.VfsRegistered += (sender, num) =>
+        {
+            if (sender is not IAesVfsReader reader) return;
+            Log.Information($"Loaded {reader.Name} ({num} archives)");
+        };
+        
+        Provider = streamedProvider;
+        await LoadEpicManifest();
+        await MountManifestArchives();
     }
 
     private async Task DeleteChunksCache()
@@ -110,11 +149,11 @@ public class DataminerService
             Math.Round(start.Elapsed.TotalMilliseconds));
     }
 
-    private async Task MountArchives()
+    private async Task MountManifestArchives()
     {
-        Log.Information("Downloading archives for {gameBuild}", Manifest.GameBuild);
+        Log.Information("Downloading archives for {gameBuild}", Manifest!.GameBuild);
         Manifest.LoadManifestArchives();
-        await Provider.MountAsync();
+        await ((StreamedFileProvider)Provider).MountAsync();
     }
 
     private async Task LoadMappings()
@@ -187,7 +226,10 @@ public class DataminerService
 
     private void TestMainKey(string key)
     {
-        var vf = Provider.MountedVfs.First(r => r.Name.Equals("pakchunk0-WindowsClient.pak"));
+        if (AppSettings.Default.UseLocalPath) return;
+        
+        var vf = Provider.MountedVfs.FirstOrDefault(r => r.Name.Equals("pakchunk0-WindowsClient.pak"));
+        if (vf is null) return;
         if (!vf.TestAesKey(new FAesKey(key)))
         {
             Log.Warning("Main key is invalid.");

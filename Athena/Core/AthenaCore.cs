@@ -48,13 +48,20 @@ public class AthenaCore
             Discord.Initialize();
         }
 
-        var epicAuth = AppSettings.Default.EpicAuth;
-        if (epicAuth is null || !epicAuth.IsValid())
+        if (!AppSettings.Default.UseLocalPath)
         {
-            if (!await AppSettings.CreateAuth())
+            var epicAuth = AppSettings.Default.EpicAuth;
+            if (epicAuth is null || !epicAuth.IsValid())
             {
-                App.ExitThread(-1);
+                if (!await AppSettings.CreateAuth())
+                {
+                    App.ExitThread(-1);
+                }
             }
+        }
+        else
+        {
+            Log.Information("Local path mode is enabled. Skipping Epic Auth");
         }
 
         await UEParser.Initialize(); // init the parser

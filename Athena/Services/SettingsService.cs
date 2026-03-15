@@ -10,7 +10,7 @@ public class SettingsService
     public UserSettings Default = null!;
 
     private readonly string _file = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Athena", "settingsV2.json"
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Athena", "settingsV2-local.json"
     );
 
     public void LoadSettings()
@@ -46,6 +46,31 @@ public class SettingsService
             save = true;
             Default.CatalogSettings.OutputPath = Directories.Output;
             Log.Warning("ItemShop Catalog output path is invalid. It has now been set to the default one: {path}.", Directories.Output);
+        }
+
+        if (Default.UseLocalPath)
+        {
+            if (Default.UseLocalPath)
+            {
+                if (string.IsNullOrEmpty(Default.LocalGamePath) || !Directory.Exists(Default.LocalGamePath))
+                {
+                    Default.UseLocalPath = false;
+                    save = true;
+                    Log.Warning("UseLocalPath is enabled but LocalGamePath is missing or invalid, it has been disabeld for this run.");
+                    
+#if RELEASE
+                    MessageService.Show("Invalid Settings", "UseLocalPath is enabled but the does not exist.\n\n" +
+                                                             "Please set a valid path to your Fortnite Paks Directory in settingsV2.json, e.g:\n" +
+                                        "\"LocalGamePath\": C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Content\\Paks\"",
+                        MessageService.MB_OK | MessageService.MB_ICONWARNING
+                    );
+#endif
+                }
+                else
+                {
+                    Log.Information($"Local game path is set to: {Default.LocalGamePath}");
+                }
+            }
         }
         if (Default.UseCustomMappingFile && string.IsNullOrEmpty(Default.CustomMappingFile))
         {

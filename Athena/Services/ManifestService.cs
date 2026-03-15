@@ -5,6 +5,7 @@ using EpicManifestParser.Api;
 using EpicManifestParser.ZlibngDotNetDecompressor;
 using CUE4Parse.UE4.Readers;
 using CUE4Parse.Compression;
+using CUE4Parse.FileProvider;
 
 namespace Athena.Services;
 
@@ -60,8 +61,9 @@ public partial class ManifestService
 
     private void LoadFileManifest(FFileManifest file)
     {
-        var versions = UEParser.Provider.Versions;
-        UEParser.Provider.RegisterVfs(file.FileName, [file.GetStream()], 
+        var streamed = (StreamedFileProvider)UEParser.Provider;
+        var versions = streamed.Versions;
+        streamed.RegisterVfs(file.FileName, [file.GetStream()], 
             it => new FRandomAccessStreamArchive(it, GetStream(it), versions));
     }
 

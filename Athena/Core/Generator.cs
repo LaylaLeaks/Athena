@@ -43,6 +43,12 @@ public class Generator
         EGenerationType.ReturnToMenu
     ];
 
+    private List<EGenerationType> AvailableGenerationTypes => AppSettings.Default.UseLocalPath
+        ? _generationTypes.FindAll(gt =>
+            gt is not EGenerationType.WaitForArchivesUpdate &&
+            gt is not EGenerationType.ArchiveCosmetics)
+        : _generationTypes;
+
     private readonly List<EBackupOption> _backupOptions =
     [
         EBackupOption.Streamed,
@@ -63,6 +69,8 @@ public class Generator
     #region main
     public void LoadAvailableArchives()
     {
+        if (AppSettings.Default.UseLocalPath) return;
+        
         foreach (var vf in UEParser.Provider.MountedVfs)
         {
             if (!vf.Name.EndsWith("utoc") || vf.EncryptionKeyGuid == UEParser.ZERO_GUID)
@@ -82,8 +90,8 @@ public class Generator
 
             Console.Clear(); // clear console from parser logs & api logs
 
-            Console.Title = $"Athena {Globals.Version.DisplayName} - FortniteGame v{UEParser.Manifest.GameVersion}";
-            Discord.Update($"In Menu - FortniteGame v{UEParser.Manifest.GameVersion}");
+            Console.Title = $"Athena {Globals.Version.DisplayName} - FortniteGame v{UEParser.GameVersion}";
+            Discord.Update($"In Menu - FortniteGame v{UEParser.GameVersion}");
 
             AnsiConsole.Markup($"Welcome to [12]Athena {Globals.Version.DisplayName}[/]: Made with [124]<3[/] by [12]@djlorenzouasset[/] & [12]@andredotuasset[/] with the help of many others.\n");
             AnsiConsole.Markup($"Join the [12]Discord Server[/] to stay updated on the development: [12]{Globals.DISCORD_URL}[/]\n");
@@ -315,7 +323,7 @@ public class Generator
     private EGenerationType SelectGenerationType(EModelType selectedModel)
     {
         string title = $"What do you want to use to generate this [12]{selectedModel.DisplayName()}[/]?";
-        return App.SelectionPrompt(title, _generationTypes.FindAll(gt => !gt.DisabledFor(selectedModel)), gt => gt.DisplayName());
+        return App.SelectionPrompt(title, AvailableGenerationTypes.FindAll(gt => !gt.DisabledFor(selectedModel)), gt => gt.DisplayName());
     }
 
     private List<FGuid> SelectArchives(List<IAesVfsReader> availableEntries)

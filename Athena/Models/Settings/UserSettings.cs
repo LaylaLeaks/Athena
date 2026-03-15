@@ -15,6 +15,10 @@ public class UserSettings
     public bool ShowChangeLog { get; set; } = false;
     public bool UseCustomMappingFile { get; set; } = false;
     public string CustomMappingFile { get; set; } = null!;
+    
+    // --- local path settings ---
+    public bool UseLocalPath { get; set; } = false;
+    public string LocalGamePath { get; set; } = null;
 
     // --- chunks settings ---
     public ChunksSettings ChunksSettings { get; set; } = new();
